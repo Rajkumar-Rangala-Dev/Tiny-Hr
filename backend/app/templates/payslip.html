@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Payslip - {{ employee.full_name }} - {{ month_name }} {{ payslip.year }}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 15mm 12mm 15mm 12mm;
+    @bottom-center {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 9px;
+      color: #888;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DejaVu Sans', Arial, sans-serif; font-size: 10px; color: #1a1a1a; background: #fff; position: relative; }
+
+  .watermark {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-35deg);
+    opacity: {{ org.watermark_opacity }};
+    z-index: 0;
+    pointer-events: none;
+    width: 340px;
+  }
+
+  .content { position: relative; z-index: 1; }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2.5px solid #1e3a5f;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-logo { width: 60px; height: 60px; object-fit: contain; }
+  .header-logo-placeholder { width: 60px; height: 60px; background: #e2e8f0; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #888; }
+  .org-name { font-size: 16px; font-weight: bold; color: #1e3a5f; }
+  .org-details { font-size: 8.5px; color: #555; margin-top: 2px; line-height: 1.5; }
+  .header-right { text-align: right; }
+  .payslip-title { font-size: 14px; font-weight: bold; color: #1e3a5f; text-transform: uppercase; letter-spacing: 1px; }
+  .payslip-period { font-size: 10px; color: #555; margin-top: 4px; }
+
+  /* ── SECTION TITLE ── */
+  .section-title {
+    background: #1e3a5f;
+    color: #fff;
+    font-size: 9.5px;
+    font-weight: bold;
+    padding: 4px 8px;
+    margin: 10px 0 6px 0;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* ── EMPLOYEE DETAILS GRID ── */
+  .emp-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 10px; }
+  .emp-field { display: flex; flex-direction: column; padding: 3px 0; }
+  .emp-label { font-size: 8px; color: #777; text-transform: uppercase; letter-spacing: 0.3px; }
+  .emp-value { font-size: 9.5px; color: #1a1a1a; font-weight: 500; margin-top: 1px; }
+
+  /* ── ATTENDANCE BAND ── */
+  .att-band {
+    display: flex;
+    justify-content: space-around;
+    background: #f0f4f8;
+    border: 1px solid #d1dce8;
+    border-radius: 4px;
+    padding: 6px 0;
+    margin-bottom: 6px;
+  }
+  .att-item { text-align: center; }
+  .att-num { font-size: 15px; font-weight: bold; color: #1e3a5f; }
+  .att-lbl { font-size: 8px; color: #777; text-transform: uppercase; margin-top: 1px; }
+
+  /* ── EARNINGS / DEDUCTIONS TABLE ── */
+  .pay-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    background: #2d5986;
+    color: #fff;
+    font-size: 9px;
+    padding: 5px 6px;
+    text-align: left;
+  }
+  thead th:last-child { text-align: right; }
+  tbody tr td { padding: 4px 6px; font-size: 9px; border-bottom: 1px solid #edf2f7; }
+  tbody tr td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:nth-child(even) { background: #f7fafc; }
+  tfoot td {
+    padding: 5px 6px;
+    font-size: 9.5px;
+    font-weight: bold;
+    border-top: 2px solid #1e3a5f;
+    background: #eef3f9;
+  }
+  tfoot td:last-child { text-align: right; }
+
+  /* ── YTD ROW ── */
+  .ytd-row { background: #f7f9fb; border: 1px solid #d1dce8; border-radius: 4px; padding: 6px 10px; margin-top: 8px; display: flex; gap: 30px; align-items: center; }
+  .ytd-label { font-size: 8.5px; color: #555; text-transform: uppercase; }
+  .ytd-val { font-size: 11px; font-weight: bold; color: #1e3a5f; margin-top: 2px; }
+
+  /* ── NET PAY BOX ── */
+  .net-pay-box {
+    margin-top: 12px;
+    border: 2px solid #1e3a5f;
+    border-radius: 6px;
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #1e3a5f 0%, #2d5986 100%);
+    color: #fff;
+  }
+  .net-pay-label { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
+  .net-pay-amount { font-size: 22px; font-weight: bold; }
+  .net-pay-words { font-size: 8px; margin-top: 3px; opacity: 0.85; }
+
+  /* ── FOOTER ── */
+  .payslip-footer {
+    margin-top: 16px;
+    border-top: 1px solid #d1dce8;
+    padding-top: 8px;
+    text-align: center;
+    font-size: 8px;
+    color: #888;
+    line-height: 1.6;
+  }
+
+  .rupee::before { content: "₹"; }
+</style>
+</head>
+<body>
+  {% if logo_b64 %}
+  <img class="watermark" src="{{ logo_b64 }}" alt="watermark" />
+  {% endif %}
+
+  <div class="content">
+
+    <!-- ── HEADER ── -->
+    <div class="header">
+      <div class="header-left">
+        {% if logo_b64 %}
+          <img class="header-logo" src="{{ logo_b64 }}" alt="{{ org.name }} logo" />
+        {% else %}
+          <div class="header-logo-placeholder">LOGO</div>
+        {% endif %}
+        <div>
+          <div class="org-name">{{ org.name }}</div>
+          <div class="org-details">
+            {% if org.registered_address %}{{ org.registered_address }}<br/>{% endif %}
+            {% if org.cin %}CIN: {{ org.cin }}{% endif %}
+            {% if org.cin and org.gstin %} &nbsp;|&nbsp; {% endif %}
+            {% if org.gstin %}GSTIN: {{ org.gstin }}{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="payslip-title">Salary Slip</div>
+        <div class="payslip-period">{{ month_name }} {{ payslip.year }}</div>
+      </div>
+    </div>
+
+    <!-- ── EMPLOYEE DETAILS ── -->
+    <div class="section-title">Employee Details</div>
+    <div class="emp-grid">
+      <div class="emp-field"><span class="emp-label">Employee Name</span><span class="emp-value">{{ employee.full_name }}</span></div>
+      <div class="emp-field"><span class="emp-label">Employee ID</span><span class="emp-value">{{ employee.employee_code }}</span></div>
+      <div class="emp-field"><span class="emp-label">Designation</span><span class="emp-value">{{ employee.designation or "—" }}</span></div>
+      <div class="emp-field"><span class="emp-label">Department</span><span class="emp-value">{{ employee.department or "—" }}</span></div>
+      <div class="emp-field"><span class="emp-label">Date of Joining</span><span class="emp-value">{{ employee.date_of_joining.strftime("%d %b %Y") if employee.date_of_joining else "—" }}</span></div>
+      <div class="emp-field"><span class="emp-label">PAN</span><span class="emp-value">{{ employee.pan or "—" }}</span></div>
+      <div class="emp-field"><span class="emp-label">UAN</span><span class="emp-value">{{ employee.uan or "—" }}</span></div>
+      <div class="emp-field"><span class="emp-label">Bank Account</span><span class="emp-value">{{ bank_account_masked or "—" }}</span></div>
+      <div class="emp-field"><span class="emp-label">Bank / IFSC</span><span class="emp-value">{{ employee.bank_name or "—" }} / {{ employee.bank_ifsc or "—" }}</span></div>
+    </div>
+
+    <!-- ── ATTENDANCE SUMMARY ── -->
+    <div class="section-title">Attendance Summary</div>
+    <div class="att-band">
+      <div class="att-item"><div class="att-num">{{ payslip.working_days }}</div><div class="att-lbl">Working Days</div></div>
+      <div class="att-item"><div class="att-num">{{ payslip.days_present | int }}</div><div class="att-lbl">Days Present</div></div>
+      <div class="att-item"><div class="att-num">{{ payslip.days_absent | int }}</div><div class="att-lbl">Days Absent</div></div>
+      <div class="att-item"><div class="att-num">{{ payslip.lop_days | int }}</div><div class="att-lbl">LOP Days</div></div>
+      <div class="att-item"><div class="att-num">{{ payslip.leaves_taken | int }}</div><div class="att-lbl">Leaves Taken</div></div>
+    </div>
+
+    <!-- ── EARNINGS & DEDUCTIONS ── -->
+    <div class="section-title">Earnings &amp; Deductions</div>
+    <div class="pay-tables">
+      <!-- Earnings -->
+      <table>
+        <thead><tr><th>Earnings</th><th>Monthly</th><th>YTD</th></tr></thead>
+        <tbody>
+          {% for name, amount in payslip.earnings_breakdown.items() %}
+          <tr>
+            <td>{{ name }}</td>
+            <td>₹{{ "%.2f" | format(amount) }}</td>
+            <td>—</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><td>Gross Earnings</td><td>₹{{ "%.2f" | format(payslip.gross_earnings) }}</td><td>₹{{ "%.2f" | format(payslip.ytd_earnings) }}</td></tr>
+        </tfoot>
+      </table>
+
+      <!-- Deductions -->
+      <table>
+        <thead><tr><th>Deductions</th><th>Monthly</th><th>YTD</th></tr></thead>
+        <tbody>
+          {% for name, amount in payslip.deductions_breakdown.items() %}
+          <tr>
+            <td>{{ name }}</td>
+            <td>₹{{ "%.2f" | format(amount) }}</td>
+            <td>—</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr><td>Total Deductions</td><td>₹{{ "%.2f" | format(payslip.total_deductions) }}</td><td>₹{{ "%.2f" | format(payslip.ytd_deductions) }}</td></tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <!-- ── YTD BAND ── -->
+    <div class="ytd-row">
+      <div><div class="ytd-label">YTD Gross Earnings</div><div class="ytd-val">₹{{ "%.2f" | format(payslip.ytd_earnings) }}</div></div>
+      <div><div class="ytd-label">YTD Total Deductions</div><div class="ytd-val">₹{{ "%.2f" | format(payslip.ytd_deductions) }}</div></div>
+      <div><div class="ytd-label">YTD Net Pay</div><div class="ytd-val">₹{{ "%.2f" | format(payslip.ytd_earnings - payslip.ytd_deductions) }}</div></div>
+    </div>
+
+    <!-- ── NET PAY ── -->
+    <div class="net-pay-box">
+      <div>
+        <div class="net-pay-label">Net Pay for {{ month_name }} {{ payslip.year }}</div>
+        <div class="net-pay-words">{{ net_pay_in_words }}</div>
+      </div>
+      <div class="net-pay-amount">₹{{ "%.2f" | format(payslip.net_pay) }}</div>
+    </div>
+
+    <!-- ── FOOTER ── -->
+    <div class="payslip-footer">
+      {% if org.payslip_footer_text %}{{ org.payslip_footer_text }}<br/>{% endif %}
+      This is a computer-generated payslip and does not require a signature.
+    </div>
+
+  </div>
+</body>
+</html>
