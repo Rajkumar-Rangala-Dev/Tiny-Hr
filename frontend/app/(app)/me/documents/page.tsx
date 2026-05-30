@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, FileText, Download, Send, RefreshCw, FileCheck } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
@@ -204,9 +203,9 @@ export default function MyDocumentsPage() {
                           )}
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
-                          <Badge variant={isIssued ? "default" : "outline"} className={isIssued ? "bg-green-100 text-green-800" : "bg-yellow-50 text-yellow-700 border-yellow-200"}>
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border ${isIssued ? "bg-green-50 text-green-700 border-green-200" : "bg-yellow-50 text-yellow-700 border-yellow-200"}`}>
                             {isIssued ? "Issued" : d.status}
-                          </Badge>
+                          </span>
                           {isIssued && d.id && (
                             <Button
                               size="sm"

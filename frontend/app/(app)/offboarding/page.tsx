@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { offboardingApi, employeesApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Loader2, Plus, UserMinus, ShieldAlert, CheckCircle2, ClipboardList, HelpCircle } from "lucide-react";
@@ -259,12 +258,12 @@ export default function OffboardingPage() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge variant={c.status === "completed" ? "default" : "outline"} className={c.status === "completed" ? "bg-green-100 text-green-800" : "bg-blue-50 text-blue-700 border-blue-200"}>
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border ${c.status === "completed" ? "bg-green-50 text-green-700 border-green-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
                               {c.status}
-                            </Badge>
-                            <Badge variant="secondary">
+                            </span>
+                            <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-800 px-2.5 py-0.5 text-xs font-semibold">
                               {completedTasks}/{totalTasks} cleared
-                            </Badge>
+                            </span>
                           </div>
                         </div>
 
