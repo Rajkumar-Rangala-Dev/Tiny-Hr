@@ -92,7 +92,7 @@ export default function EmployeeDetailPage() {
           const records = attRes.data;
           const summary: AttendanceSummary = { present: 0, absent: 0, half_day: 0, work_from_home: 0, on_leave: 0, holiday: 0, week_off: 0, working_days: records.length };
           records.forEach((r: { status: string }) => {
-            if (r.status in summary) (summary as Record<string, number>)[r.status]++;
+            if (r.status in summary) (summary as any)[r.status]++;
           });
           setAttendance(summary);
         } catch { /* no attendance data */ }
