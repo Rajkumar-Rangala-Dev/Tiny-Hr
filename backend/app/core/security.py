@@ -61,7 +61,7 @@ async def get_current_user(
     return user
 
 
-async def require_roles(*roles: str):
+def require_roles(*roles: str):
     async def role_checker(current_user=Depends(get_current_user)):
         if current_user.role not in roles:
             raise HTTPException(
