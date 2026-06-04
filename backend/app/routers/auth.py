@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
@@ -30,7 +30,7 @@ def slugify(text: str) -> str:
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
 @limiter.limit("3/hour")
-async def register_org(data: OrgRegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register_org(request: Request, data: OrgRegisterRequest, db: AsyncSession = Depends(get_db)):
     slug = slugify(data.org_slug)
     existing_slug = await db.execute(select(Organization).where(Organization.slug == slug))
     if existing_slug.scalar_one_or_none():
@@ -80,7 +80,7 @@ async def register_org(data: OrgRegisterRequest, db: AsyncSession = Depends(get_
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
-async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(request: Request, data: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(data.password, user.hashed_password):
@@ -250,7 +250,7 @@ async def employee_set_password(
 
 @router.post("/forgot-password")
 @limiter.limit("3/hour")
-async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+async def forgot_password(request: Request, data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     from datetime import timedelta
     from app.core.config import get_settings
     
