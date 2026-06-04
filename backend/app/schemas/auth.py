@@ -1,5 +1,6 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
+import re
 
 
 class OrgRegisterRequest(BaseModel):
@@ -8,6 +9,25 @@ class OrgRegisterRequest(BaseModel):
     admin_email: EmailStr
     admin_password: str
     admin_full_name: str
+
+    @field_validator('admin_password')
+    def validate_password(cls, v):
+        if len(v) < 12:
+            raise ValueError('Password must be at least 12 characters')
+        
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        
+        if not re.search(r'[0-9]', v):
+            raise ValueError('Password must contain at least one number')
+        
+        if not re.search(r'[!@#$%^&*()_+\-=\[\]{};:\'",.<>?/\\|`~]', v):
+            raise ValueError('Password must contain at least one special character')
+        
+        return v
 
 
 class LoginRequest(BaseModel):

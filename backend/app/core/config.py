@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     STORAGE_BUCKET_DOCS: str = "employee-docs"
     STORAGE_BUCKET_PAYSLIPS: str = "payslips"
     STORAGE_BUCKET_LOGOS: str = "org-logos"
+    FRONTEND_URL: str = "http://localhost:3000"
 
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587

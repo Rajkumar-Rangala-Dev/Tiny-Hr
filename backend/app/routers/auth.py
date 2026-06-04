@@ -12,9 +12,16 @@ from app.schemas.auth import (
     ResetPasswordRequest
 )
 from app.services.email_service import send_email_notification
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 import re
+import logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+limiter = Limiter(key_func=get_remote_address)
 
 
 def slugify(text: str) -> str:
@@ -22,14 +29,17 @@ def slugify(text: str) -> str:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
+@limiter.limit("3/hour")
 async def register_org(data: OrgRegisterRequest, db: AsyncSession = Depends(get_db)):
     slug = slugify(data.org_slug)
     existing_slug = await db.execute(select(Organization).where(Organization.slug == slug))
     if existing_slug.scalar_one_or_none():
+        logger.warning(f"Registration attempt with duplicate slug: {slug}")
         raise HTTPException(status_code=400, detail="Organisation slug already taken")
 
     existing_email = await db.execute(select(User).where(User.email == data.admin_email))
     if existing_email.scalar_one_or_none():
+        logger.warning(f"Registration attempt with duplicate email: {data.admin_email}")
         raise HTTPException(status_code=400, detail="Email already registered")
 
     org = Organization(name=data.org_name, slug=slug)
@@ -54,6 +64,9 @@ async def register_org(data: OrgRegisterRequest, db: AsyncSession = Depends(get_
         "employee_id": user.employee_id,
         "must_change_password": user.must_change_password
     })
+    
+    logger.info(f"New organization registered: {org.id} (slug: {slug}, admin: {user.id})")
+    
     return TokenResponse(
         access_token=token,
         user_id=user.id,
@@ -66,12 +79,15 @@ async def register_org(data: OrgRegisterRequest, db: AsyncSession = Depends(get_
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(data.password, user.hashed_password):
+        logger.warning(f"Failed login attempt for email: {data.email}")
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not user.is_active:
+        logger.warning(f"Inactive user login attempt: {user.id} ({data.email})")
         raise HTTPException(status_code=403, detail="Account is inactive")
 
     token = create_access_token({
@@ -81,6 +97,9 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
         "employee_id": user.employee_id,
         "must_change_password": user.must_change_password
     })
+    
+    logger.info(f"Successful login for user: {user.id} (email: {data.email}, org: {user.org_id})")
+    
     return TokenResponse(
         access_token=token,
         user_id=user.id,
@@ -95,6 +114,27 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 @router.get("/me", response_model=UserOut)
 async def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_token(current_user: User = Depends(get_current_user)):
+    """Refresh access token using current valid token"""
+    token = create_access_token({
+        "sub": current_user.id,
+        "org_id": current_user.org_id,
+        "role": current_user.role,
+        "employee_id": current_user.employee_id,
+        "must_change_password": current_user.must_change_password
+    })
+    return TokenResponse(
+        access_token=token,
+        user_id=current_user.id,
+        org_id=current_user.org_id,
+        role=current_user.role,
+        full_name=current_user.full_name,
+        employee_id=current_user.employee_id,
+        must_change_password=current_user.must_change_password,
+    )
 
 
 @router.post("/invite", response_model=UserOut, status_code=201)
@@ -138,7 +178,7 @@ async def invite_employee(
     )
     employee = emp_result.scalar_one_or_none()
     if not employee:
-        raise HTTPException(status_code=44, detail="Employee not found")
+        raise HTTPException(status_code=404, detail="Employee not found")
 
     # Verify email is not already registered as a User
     existing_user = await db.execute(select(User).where(User.email == data.email))
@@ -165,12 +205,15 @@ async def invite_employee(
     await db.refresh(user)
 
     # Send Portal Invitation Email
+    from app.core.config import get_settings
+    settings = get_settings()
+    
     email_body = f"""
     <h2>Welcome to Tiny HR Portal, {employee.full_name}!</h2>
     <p>Your HR Administrator has created your employee self-service portal account.</p>
     <p>Please use the following credentials to log in and set up your account:</p>
     <ul>
-        <li><strong>Portal URL:</strong> <a href="http://localhost:3000/login">http://localhost:3000/login</a></li>
+        <li><strong>Portal URL:</strong> <a href="{settings.FRONTEND_URL}/login">{settings.FRONTEND_URL}/login</a></li>
         <li><strong>Username (Email):</strong> {data.email}</li>
         <li><strong>Temporary Password:</strong> {data.password}</li>
     </ul>
@@ -206,8 +249,12 @@ async def employee_set_password(
 
 
 @router.post("/forgot-password")
+@limiter.limit("3/hour")
 async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     from datetime import timedelta
+    from app.core.config import get_settings
+    
+    settings = get_settings()
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
     
@@ -217,7 +264,7 @@ async def forgot_password(data: ForgotPasswordRequest, db: AsyncSession = Depend
             {"sub": user.id, "purpose": "password_reset"},
             expires_delta=timedelta(minutes=15)
         )
-        reset_link = f"http://localhost:3000/reset-password?token={token}"
+        reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
         email_body = f"""
         <h2>Password Reset Request</h2>
         <p>Hello {user.full_name},</p>

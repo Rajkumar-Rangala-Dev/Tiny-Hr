@@ -1,5 +1,5 @@
 "use client";
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import Cookies from "js-cookie";
 import { authApi } from "./api";
 
@@ -28,35 +28,101 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Auto-refresh token before expiry (every 45 minutes)
   useEffect(() => {
-    const savedToken = Cookies.get("access_token");
-    if (savedToken) {
-      setToken(savedToken);
-      authApi
-        .me()
-        .then((res) => setUser(res.data))
-        .catch(() => logout())
-        .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
+    if (!token) return;
+
+    // Clear existing timer
+    if (refreshTimerRef.current) {
+      clearInterval(refreshTimerRef.current);
     }
+
+    // Refresh every 45 minutes (before 60-minute expiry)
+    refreshTimerRef.current = setInterval(async () => {
+      try {
+        const res = await authApi.refreshToken();
+        const { access_token } = res.data;
+        Cookies.set("access_token", access_token, {
+          expires: 1,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "Strict",
+        });
+        setToken(access_token);
+        console.debug("Token refreshed successfully");
+      } catch (err) {
+        console.error("Token refresh failed:", err);
+        logout();
+      }
+    }, 45 * 60 * 1000); // 45 minutes
+
+    return () => {
+      if (refreshTimerRef.current) {
+        clearInterval(refreshTimerRef.current);
+      }
+    };
+  }, [token]);
+
+  // Initialize auth state
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        const savedToken = Cookies.get("access_token");
+        if (savedToken) {
+          setToken(savedToken);
+          const res = await authApi.me();
+          setUser(res.data);
+        }
+      } catch (err) {
+        console.error("Failed to initialize auth:", err);
+        logout();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initAuth();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const res = await authApi.login({ email, password });
-    const { access_token, ...userData } = res.data;
-    Cookies.set("access_token", access_token, { expires: 1 });
-    setToken(access_token);
-    const meRes = await authApi.me();
-    setUser(meRes.data);
-    return meRes.data;
+  const login = async (email: string, password: string): Promise<AuthUser> => {
+    try {
+      const res = await authApi.login({ email, password });
+
+      if (!res.data?.access_token || !res.data?.user_id) {
+        throw new Error("Invalid server response");
+      }
+
+      const { access_token, ...userData } = res.data;
+      Cookies.set("access_token", access_token, {
+        expires: 1,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Strict",
+      });
+      setToken(access_token);
+
+      const meRes = await authApi.me();
+      if (!meRes.data?.id || !meRes.data?.email) {
+        throw new Error("Failed to load user data");
+      }
+
+      setUser(meRes.data);
+      return meRes.data;
+    } catch (err) {
+      console.error("Login error:", err);
+      logout();
+      throw err;
+    }
   };
 
   const logout = () => {
     Cookies.remove("access_token");
     setUser(null);
     setToken(null);
+    if (refreshTimerRef.current) {
+      clearInterval(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
   };
 
   return (
@@ -67,7 +133,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+  return context;
 }
