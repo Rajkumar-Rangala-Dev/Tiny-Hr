@@ -1,3 +1,5 @@
+"use client";
+
 import { ArrowRight, UserPlus, CheckCircle2, Award } from "lucide-react";
 
 const steps = [

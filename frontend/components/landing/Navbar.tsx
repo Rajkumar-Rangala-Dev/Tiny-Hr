@@ -1,5 +1,7 @@
 "use client";
 
+"use client";
+
 import Link from "next/link";
 import { Briefcase } from "lucide-react";
 import { useEffect, useState } from "react";

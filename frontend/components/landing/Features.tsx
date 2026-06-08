@@ -1,3 +1,5 @@
+"use client";
+
 import { Users, Clock, DollarSign, FileText, CheckSquare, File } from "lucide-react";
 
 const features = [
