@@ -34,11 +34,13 @@ app.add_middleware(
         "http://localhost:8000",
         "http://127.0.0.1:3000",
         "https://tinyhr.online",
+        "https://tiny-hr.onrender.com",  # Backend domain itself for API testing
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(auth.router, prefix="/api/v1")
